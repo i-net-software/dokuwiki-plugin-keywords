@@ -2,4 +2,4 @@
 
 Adds keywords to the page meta header
 
-For details, please see: https://www.dokuiki.org/plugin:keywords
+For details, please see: https://www.dokuwiki.org/plugin:keywords
