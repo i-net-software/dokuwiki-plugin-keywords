@@ -3,5 +3,5 @@ author i-net /// software; Ilya Lebedev
 email  tools@inetsoftware.de; ilya@lebedev.net
 date   2020-08-04
 name   Keywords
-desc   Defines keywords for the page, using {{keywords>word1 word2 wordN}} syntax.
+desc   Defines keywords for the page, using {{keywords>word1, word2, wordN}} syntax.
 url    https://www.dokuwiki.org/plugin:keywords

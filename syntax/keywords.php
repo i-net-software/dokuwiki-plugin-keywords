@@ -36,7 +36,7 @@ class syntax_plugin_keywords_keywords extends DokuWiki_Syntax_Plugin {
    * Handle the match
    */
   function handle($match, $state, $pos, Doku_Handler $handler){
-      return explode(" ",preg_replace("/{{keywords>(.*?)}}/","\\1",$match));
+      return explode(",",preg_replace("/{{keywords>(.*?)}}/","\\1",$match));
   }  
  
   /**
@@ -48,7 +48,8 @@ class syntax_plugin_keywords_keywords extends DokuWiki_Syntax_Plugin {
               /*
               *  mark metadata with found value
               */
-              $renderer->meta['keywords'] = ",".join(",",$data);
+              $data = array_map( 'trim', $data ?: [] );
+              $renderer->meta['keywords'] = ", " . join(', ', $data);
               return true;
               break;
     }
