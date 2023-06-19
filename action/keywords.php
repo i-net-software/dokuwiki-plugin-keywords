@@ -6,6 +6,7 @@
  * @author  Gerry Weißbach <tools@inetsoftware.de>
  */
 use dokuwiki\HTTP\DokuHTTPClient;
+use \dokuwiki\Logger;
 
 class action_plugin_keywords_keywords extends \dokuwiki\Extension\ActionPlugin
 {
@@ -65,7 +66,12 @@ class action_plugin_keywords_keywords extends \dokuwiki\Extension\ActionPlugin
         }
 
         $requestContent = $event->data['newContent'];
-        $requestContent = trim( preg_replace( '/\{\{keywords>.*?\}\}/i' , '', $requestContent ) );
+        $requestContent = trim( preg_replace( '/\{\{keywords>.*?\}\}/is' , '', $requestContent ) );
+        if ( empty( $requestContent ) ) {
+            $event->data['contentChanged'] = 1;
+            $event->data['newContent'] = '';
+            return;
+        }
 
 //*     // Remove one slash to have a sample of keywords saved instead of checking with chatGPT
         $httpClient = new DokuHTTPClient();
@@ -78,30 +84,74 @@ class action_plugin_keywords_keywords extends \dokuwiki\Extension\ActionPlugin
             'model' => $this->getConf('APIModel'),
             'messages' => [
                 [ "role" => "system", "content" => $this->getConf('APIRole')  ],
-                [ "role" => "user", "content" => $requestContent ],
-        ] ] ), 'POST');
+                [ "role" => "user", "content" => $requestContent ]
+            ],
+            "functions" => [[
+                "name" => "keywords_for_text",
+                "description" => "Use this function to sent the list of keywords back to the dokuwiki. The Input is the array of keywords",
+                "parameters" => [
+                    "type" => "object",
+                    "properties" => [
+                        "keywords" => [
+                            "type" => "array",
+                            "items" => [
+                                "type" => "string"
+                            ],
+                            "description" => "This is the list of keywords generated from the input. Each keyword is given as string."
+                        ]
+                    ]
+                ]
+            ],[
+                "name" => "no_content",
+                "description" => "Use this function to indicate that no kexwords could be generated.",
+                "parameters" => [
+                    "type" => "object",
+                    "properties" => [
+                        "empty" => [
+                            "type" => "string",
+                            "description" => "This parameter must always be NULL."
+                        ]
+                    ]
+                ]
+            ]]
+        ] ), 'POST');
 
         $data = json_decode( $httpClient->resp_body );
 
         if ( $status === false ) {
-            $error = $httpClient->error;
+            Logger::error( "An error occurred during the Chat GPT call", $httpClient->error, __FILE__, __LINE__ );
+            return;
         } else if ( $data->error ) {
-            $error = $data->error->message;
+            Logger::error( "An error occurred during the Chat GPT call", $data->error->message, __FILE__, __LINE__ );
+            return;
         }
 
-        if ( !empty( $error ) ) {
-            print "Error:<br>\n";
-            print_r( $error );
-            exit;
+        if ( $data->choices[0]->message->function_call->name == "keywords_for_text" ) {
+            $arguments = json_decode( $data->choices[0]->message->function_call->arguments );
+            $keywords = $arguments->keywords;
+            Logger::debug( "Chat GPT response", $keywords, __FILE__, __LINE__ );
+        } else {
+            Logger::debug( "INVALID Chat GPT response", $data->choices[0]->message, __FILE__, __LINE__ );
         }
 
-        $keywords = $data->choices[0]->message->content;
+        if ( empty( $keywords ) || !is_array( $keywords ) ) {
+            // there is no content herre.
+            if ( $requestContent == $event->data['newContent'] ) {
+                // Nothing has changed, return
+                return;
+            }
+
+            // The keywords are empty now.
+            $event->data['contentChanged'] = 1;
+            $event->data['newContent'] = $requestContent;
+            return;
+        }
 /*/
-        $keywords = 'word1, word2, word3, word4';
+        $keywords = [ "word1", "word2", "word3", "word4" ];
 //*/
 
         $event->data['contentChanged'] = 1;
-        $event->data['newContent'] = '{{keywords>' . $keywords . '}}' . "\n\n" . $requestContent;
+        $event->data['newContent'] = '{{keywords>' . implode( ", ", $keywords ) . '}}' . "\n\n" . $requestContent;
     }
 
     /**
